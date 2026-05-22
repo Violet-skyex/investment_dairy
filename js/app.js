@@ -211,6 +211,7 @@ async function loadFromGitHub() {
     state.db.seen_tx_hashes = state.db.seen_tx_hashes || [];
     state.db.predictions = state.db.predictions || [];
     state.db.notes = state.db.notes || {};
+    recomputeTransactionTypes();
     recomputeRealizedPnL();
     // chart_data.json is optional — ignore 404
     try {
@@ -285,6 +286,8 @@ function cacheLoad() {
     const prices = localStorage.getItem('pt_prices');
     if (db) state.db = JSON.parse(db);
     if (prices) state.prices = JSON.parse(prices);
+    recomputeTransactionTypes();
+    recomputeRealizedPnL();
   } catch {}
 }
 
@@ -602,9 +605,17 @@ function classifyTx(action) {
   if (a.includes('YOU SOLD')) return 'sell';
   if (a.includes('DIRECT DEPOSIT') || a.includes(' ACH ') || a.includes('TRANSFER') ||
       a.includes('CONTRIBUTION') || a.includes('ROLLOVER') || a.includes('EMPLOYER') ||
-      a.includes('PROFIT SHARING')) return 'deposit';
+      a.includes('PROFIT SHARING') || a.includes('CONVERSION')) return 'deposit';
   if (a.includes('DIVIDEND') || a.includes('REINVESTMENT')) return 'dividend';
   return 'other';
+}
+
+// Re-apply classifyTx to all saved transactions using action_raw.
+// Needed because type is persisted in db.json and may predate classifier fixes.
+function recomputeTransactionTypes() {
+  for (const tx of state.db.transactions) {
+    if (tx.action_raw) tx.type = classifyTx(tx.action_raw);
+  }
 }
 
 function isValidAccountNumber(str) {
@@ -1444,6 +1455,7 @@ async function confirmImport(positionResult, historyResult) {
     }
   }
 
+  recomputeTransactionTypes();
   recomputeRealizedPnL();
   hideModal();
   const saved = await saveDB('data: import CSV');
