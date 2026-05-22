@@ -337,6 +337,142 @@ function getDashboardData() {
   return { totalValue, totalDailyGL, totalUnrealizedGL, deposits, realizedPnL, accountRows, lastUpdated };
 }
 
+const ACCT_COLORS = {
+  'Z39427432': '#4f8ef7',
+  '263684031': '#22c993',
+  '74509':     '#f5a623',
+};
+
+function computeReturnSeries() {
+  const snaps = state.db.position_snapshots;
+  const dates = [...new Set(snaps.map(s => s.date))].sort();
+  if (dates.length === 0) return { dates: [], series: {} };
+
+  const ORDER = ['Z39427432', '263684031', '74509'];
+  const accounts = [...new Set(snaps.map(s => s.account_number))]
+    .sort((a, b) => ORDER.indexOf(a) - ORDER.indexOf(b));
+
+  const series = {};
+  for (const acct of accounts) {
+    const acctSnaps = snaps.filter(s => s.account_number === acct);
+    const points = [];
+    let prevIndex = 1.0;
+
+    for (const date of dates) {
+      const day = acctSnaps.filter(s => s.date === date && !s.is_pending);
+      if (day.length === 0) continue;
+
+      const totalGL = day.reduce((s, p) => s + (p.todays_gain_loss_dollar || 0), 0);
+      const totalVal = day.reduce((s, p) => s + (p.current_value || 0), 0);
+      const prevVal = totalVal - totalGL;
+
+      if (points.length === 0) {
+        // anchor first day at 1.0
+        points.push({ date, index: 1.0 });
+      } else if (prevVal > 0) {
+        prevIndex = points[points.length - 1].index * (1 + totalGL / prevVal);
+        points.push({ date, index: prevIndex });
+      }
+    }
+
+    if (points.length > 0) series[acct] = points;
+  }
+
+  return { dates, series };
+}
+
+function renderReturnChart() {
+  const { dates, series } = computeReturnSeries();
+  const accts = Object.keys(series).sort((a, b) => {
+    const ORDER = ['Z39427432', '263684031', '74509'];
+    return ORDER.indexOf(a) - ORDER.indexOf(b);
+  });
+
+  if (dates.length < 2) {
+    return `
+      <div style="padding:12px 16px 0">
+        <div class="card" style="padding:14px 16px">
+          <div style="font-size:13px;font-weight:600;margin-bottom:6px">Return Index</div>
+          <div class="text-muted text-sm" style="text-align:center;padding:20px 0 4px">
+            Upload position snapshots on multiple days to see the performance chart
+          </div>
+        </div>
+      </div>`;
+  }
+
+  // SVG dimensions
+  const W = 340, H = 168;
+  const PL = 40, PR = 12, PT = 10, PB = 28;
+  const plotW = W - PL - PR, plotH = H - PT - PB;
+
+  // Y range
+  const allIdx = accts.flatMap(a => series[a].map(p => p.index));
+  const minY = Math.min(...allIdx);
+  const maxY = Math.max(...allIdx);
+  const pad = Math.max((maxY - minY) * 0.2, 0.003);
+  const yMin = minY - pad, yMax = maxY + pad;
+
+  const xOf = d => PL + (dates.indexOf(d) / (dates.length - 1)) * plotW;
+  const yOf = v => PT + plotH - ((v - yMin) / (yMax - yMin)) * plotH;
+
+  // Baseline at 1.0
+  const baseY = yOf(1.0).toFixed(1);
+
+  // Paths
+  let paths = '', endDots = '';
+  for (const acct of accts) {
+    const pts = series[acct];
+    const color = ACCT_COLORS[acct] || '#888';
+    const d = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${xOf(p.date).toFixed(1)},${yOf(p.index).toFixed(1)}`).join(' ');
+    paths += `<path d="${d}" stroke="${color}" stroke-width="2" fill="none" stroke-linejoin="round" stroke-linecap="round"/>`;
+    const last = pts[pts.length - 1];
+    endDots += `<circle cx="${xOf(last.date).toFixed(1)}" cy="${yOf(last.index).toFixed(1)}" r="3.5" fill="${color}"/>`;
+  }
+
+  // X axis labels (at most 5, evenly spaced)
+  let xLabels = '';
+  const step = Math.max(1, Math.ceil(dates.length / 5));
+  for (let i = 0; i < dates.length; i += step) {
+    const x = xOf(dates[i]).toFixed(1);
+    xLabels += `<text x="${x}" y="${H - 5}" text-anchor="middle" font-size="9" fill="var(--text-muted)">${dates[i].slice(5)}</text>`;
+  }
+
+  // Y axis labels: min, 0%, max
+  let yLabels = '';
+  for (const v of [yMin + pad * 0.5, 1.0, yMax - pad * 0.5]) {
+    const y = yOf(v);
+    if (y < PT || y > PT + plotH) continue;
+    const label = ((v - 1) * 100).toFixed(1) + '%';
+    yLabels += `<text x="${PL - 4}" y="${y.toFixed(1)}" text-anchor="end" dominant-baseline="middle" font-size="9" fill="var(--text-muted)">${label}</text>`;
+  }
+
+  // Legend chips
+  const legend = accts.map(a =>
+    `<span style="display:inline-flex;align-items:center;gap:3px">
+      <svg width="14" height="3" style="vertical-align:middle"><line x1="0" y1="1.5" x2="14" y2="1.5" stroke="${ACCT_COLORS[a]||'#888'}" stroke-width="2"/></svg>
+      <span style="font-size:10px;color:var(--text-muted)">${ACCOUNTS[a] || a}</span>
+    </span>`
+  ).join('<span style="margin:0 6px"></span>');
+
+  return `
+    <div style="padding:12px 16px 0">
+      <div class="card" style="padding:12px 10px 8px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;padding:0 4px">
+          <span style="font-size:13px;font-weight:600">Return Index</span>
+          <div style="display:flex;gap:0">${legend}</div>
+        </div>
+        <svg viewBox="0 0 ${W} ${H}" width="100%" style="overflow:visible;display:block">
+          <line x1="${PL}" y1="${baseY}" x2="${(W - PR).toFixed(1)}" y2="${baseY}"
+                stroke="var(--border)" stroke-width="1" stroke-dasharray="3,2"/>
+          ${paths}
+          ${endDots}
+          ${xLabels}
+          ${yLabels}
+        </svg>
+      </div>
+    </div>`;
+}
+
 function getPredictionAccuracy(preds) {
   const verified = preds.filter(p => p.result === 'correct' || p.result === 'wrong');
   const correct = verified.filter(p => p.result === 'correct').length;
@@ -643,6 +779,8 @@ function renderDashboard(el) {
         ${d.accountRows.length === 0 ? '<div class="text-muted text-sm" style="padding:8px 0">No data — upload a Positions CSV</div>' : ''}
       </div>
     </div>
+
+    ${renderReturnChart()}
 
     <div class="stat-grid">
       <div class="stat-cell">
