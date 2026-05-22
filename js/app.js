@@ -316,35 +316,36 @@ function getAvgCostBasis(symbol, accountNumber) {
 
 function getDashboardData() {
   const byAcct = getLatestPositionsByAccount();
+  const ORDER = ['Z39427432', '263684031', '74509'];
   const accountRows = [];
   let totalValue = 0, totalDailyGL = 0, totalUnrealizedGL = 0;
 
   for (const [acct, positions] of Object.entries(byAcct)) {
-    const val = positions.reduce((s, p) => s + (p.current_value || 0), 0);
-    const dgl = positions.reduce((s, p) => s + (p.todays_gain_loss_dollar || 0), 0);
-    const ugl = positions.reduce((s, p) => s + (p.total_gain_loss_dollar || 0), 0);
-    accountRows.push({ acct, name: ACCOUNTS[acct] || acct, value: val, dailyGL: dgl, unrealizedGL: ugl });
-    totalValue += val;
-    totalDailyGL += dgl;
+    const nonPending = positions.filter(p => !p.is_pending);
+    const val  = positions.reduce((s, p) => s + (p.current_value || 0), 0);
+    const dgl  = nonPending.reduce((s, p) => s + (p.todays_gain_loss_dollar || 0), 0);
+    const ugl  = nonPending.reduce((s, p) => s + (p.total_gain_loss_dollar || 0), 0);
+
+    const deposits = state.db.transactions
+      .filter(t => t.account_number === acct && t.type === 'deposit' && t.amount > 0)
+      .reduce((s, t) => s + (t.amount || 0), 0);
+
+    const realizedPnL = state.db.transactions
+      .filter(t => t.account_number === acct && t.type === 'sell' && t.realized_pnl != null)
+      .reduce((s, t) => s + t.realized_pnl, 0);
+
+    accountRows.push({ acct, name: ACCOUNTS[acct] || acct, value: val, dailyGL: dgl, unrealizedGL: ugl, deposits, realizedPnL });
+    totalValue       += val;
+    totalDailyGL     += dgl;
     totalUnrealizedGL += ugl;
   }
 
-  const deposits = state.db.transactions
-    .filter(t => t.type === 'deposit' && t.amount > 0)
-    .reduce((s, t) => s + (t.amount || 0), 0);
-
-  const realizedPnL = state.db.transactions
-    .filter(t => t.type === 'sell' && t.realized_pnl != null)
-    .reduce((s, t) => s + t.realized_pnl, 0);
+  accountRows.sort((a, b) => ORDER.indexOf(a.acct) - ORDER.indexOf(b.acct));
 
   const allDates = Object.values(byAcct).flat().map(s => s.date).filter(Boolean);
   const lastUpdated = allDates.length ? allDates.sort().reverse()[0] : null;
 
-  // sort accounts in preferred order
-  const ORDER = ['Z39427432', '263684031', '74509'];
-  accountRows.sort((a, b) => ORDER.indexOf(a.acct) - ORDER.indexOf(b.acct));
-
-  return { totalValue, totalDailyGL, totalUnrealizedGL, deposits, realizedPnL, accountRows, lastUpdated };
+  return { totalValue, totalDailyGL, totalUnrealizedGL, accountRows, lastUpdated };
 }
 
 const ACCT_COLORS = {
@@ -394,10 +395,18 @@ function computeReturnSeries() {
 function renderReturnChart() {
   const ORDER = ['Z39427432', '263684031', '74509'];
 
-  // Prefer pre-computed series from GitHub Actions; fall back to snapshot-based
-  const rawSeries = (state.chartData && Object.keys(state.chartData.series || {}).length)
-    ? state.chartData.series
-    : computeReturnSeries().series;
+  // Merge: GitHub Actions series (Individual/ROTH IRA via yfinance) +
+  // snapshot-based series (401k and any account Actions can't fetch).
+  // Actions data wins per account if it has ≥ 2 points.
+  const actionsSeries   = (state.chartData && state.chartData.series) || {};
+  const snapshotSeries  = computeReturnSeries().series;
+  const rawSeries = {};
+  const allKnown = new Set([...Object.keys(actionsSeries), ...Object.keys(snapshotSeries)]);
+  for (const a of allKnown) {
+    const act  = actionsSeries[a]  || [];
+    const snap = snapshotSeries[a] || [];
+    rawSeries[a] = act.length >= 2 ? act : snap.length >= 2 ? snap : [];
+  }
 
   const allAccts = Object.keys(rawSeries)
     .filter(a => (rawSeries[a] || []).length >= 2)
@@ -591,7 +600,9 @@ function classifyTx(action) {
   const a = action.toUpperCase();
   if (a.includes('YOU BOUGHT')) return 'buy';
   if (a.includes('YOU SOLD')) return 'sell';
-  if (a.includes('DIRECT DEPOSIT') || a.includes(' ACH ') || a.includes('TRANSFER')) return 'deposit';
+  if (a.includes('DIRECT DEPOSIT') || a.includes(' ACH ') || a.includes('TRANSFER') ||
+      a.includes('CONTRIBUTION') || a.includes('ROLLOVER') || a.includes('EMPLOYER') ||
+      a.includes('PROFIT SHARING')) return 'deposit';
   if (a.includes('DIVIDEND') || a.includes('REINVESTMENT')) return 'dividend';
   return 'other';
 }
@@ -799,47 +810,48 @@ function renderDashboard(el) {
       </div>
     </div>
 
-    <div class="section">
-      <div class="card" style="padding:8px 16px">
-        ${d.accountRows.map(a => `
-          <div class="account-row">
-            <span class="acct-name">${a.name}</span>
-            <span class="acct-value">${fmtMoneyFull(a.value)}</span>
+    <div style="padding:0 16px">
+      ${d.accountRows.length === 0 ? `
+        <div class="card text-muted text-sm" style="padding:16px;text-align:center">No data — upload a Positions CSV</div>
+      ` : d.accountRows.map(a => `
+        <div class="card" style="padding:12px 14px;margin-bottom:8px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+            <div style="display:flex;align-items:center;gap:7px">
+              <span style="width:8px;height:8px;border-radius:50%;background:${ACCT_COLORS[a.acct]||'var(--text-muted)'};display:inline-block;flex-shrink:0"></span>
+              <span style="font-weight:600;font-size:14px">${a.name}</span>
+            </div>
+            <span style="font-size:16px;font-weight:700">${fmtMoneyFull(a.value)}</span>
           </div>
-        `).join('')}
-        ${d.accountRows.length === 0 ? '<div class="text-muted text-sm" style="padding:8px 0">No data — upload a Positions CSV</div>' : ''}
-      </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 12px;font-size:13px">
+            <div>
+              <div class="stat-label" style="margin-bottom:2px">Deposits</div>
+              <div>${a.deposits > 0 ? fmtMoneyFull(a.deposits) : '—'}</div>
+            </div>
+            <div>
+              <div class="stat-label" style="margin-bottom:2px">Unrealized P/L</div>
+              <div class="${colorClass(a.unrealizedGL)}">${fmtMoneyFull(a.unrealizedGL, true)}</div>
+            </div>
+            <div>
+              <div class="stat-label" style="margin-bottom:2px">Realized P/L</div>
+              <div class="${colorClass(a.realizedPnL)}">${a.realizedPnL !== 0 ? fmtMoneyFull(a.realizedPnL, true) : '—'}</div>
+            </div>
+            <div>
+              <div class="stat-label" style="margin-bottom:2px">Today's G/L</div>
+              <div class="${colorClass(a.dailyGL)}">${fmtMoneyFull(a.dailyGL, true)}</div>
+            </div>
+          </div>
+        </div>
+      `).join('')}
     </div>
 
     ${renderReturnChart()}
 
-    <div class="stat-grid">
-      <div class="stat-cell">
-        <div class="stat-label">Total Deposits</div>
-        <div class="stat-value">${fmtMoneyFull(d.deposits)}</div>
+    <div style="padding:8px 16px 16px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px" class="text-muted text-xs">
+        <span>Positions as of <strong style="color:var(--text)">${fmtDate(d.lastUpdated)}</strong></span>
+        ${priceUpdated ? `<span>Prices: ${priceUpdated}</span>` : ''}
       </div>
-      <div class="stat-cell">
-        <div class="stat-label">Unrealized P/L</div>
-        <div class="stat-value ${colorClass(d.totalUnrealizedGL)}">${fmtMoneyFull(d.totalUnrealizedGL, true)}</div>
-      </div>
-      <div class="stat-cell">
-        <div class="stat-label">Realized P/L</div>
-        <div class="stat-value ${colorClass(d.realizedPnL)}">${fmtMoneyFull(d.realizedPnL, true)}</div>
-      </div>
-      <div class="stat-cell">
-        <div class="stat-label">Today's G/L</div>
-        <div class="stat-value ${colorClass(d.totalDailyGL)}">${fmtMoneyFull(d.totalDailyGL, true)}</div>
-      </div>
-    </div>
-
-    <div class="section">
-      <div class="card" style="padding:12px 16px">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-          <span class="text-muted text-sm">Positions as of: <strong style="color:var(--text)">${fmtDate(d.lastUpdated)}</strong></span>
-          ${priceUpdated ? `<span class="text-muted text-xs">Prices: ${priceUpdated}</span>` : ''}
-        </div>
-        <button class="btn btn-primary" id="btn-upload-dash">⬆ Upload CSV</button>
-      </div>
+      <button class="btn btn-primary" id="btn-upload-dash">⬆ Upload CSV</button>
     </div>
   `;
 
