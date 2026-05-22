@@ -1,0 +1,40 @@
+name: Fetch Prices
+
+on:
+  schedule:
+    - cron: '35 13 * * 1-5'   # 9:35 AM ET (EDT = UTC-4)
+    - cron: '5 20 * * 1-5'    # 4:05 PM ET
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install yfinance
+
+      - name: Fetch prices and verify predictions
+        run: python scripts/fetch_prices.py
+
+      - name: Commit changes
+        run: |
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git add data/prices.json data/db.json
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "chore: update prices $(date -u '+%Y-%m-%d %H:%M') UTC"
+            git push
+          fi
