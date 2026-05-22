@@ -141,8 +141,12 @@ def fetch_historical_prices(symbols, start_date):
 
 def compute_portfolio_history(db):
     """
-    Replay buy/sell transactions to track holdings per account on every market day,
-    value them with historical closes, and build a cumulative return index starting at 1.0.
+    Time-Weighted Return per account.
+
+    Key idea: on any day with buys/sells, compute the market return from
+    EXISTING holdings BEFORE applying that day's transactions, then update
+    the base value AFTER applying them.  This isolates pure market performance
+    and eliminates the distortion caused by cash deposits or large trades.
 
     Returns {account_number: [{"date": ..., "index": ...}, ...]}
     """
@@ -173,10 +177,14 @@ def compute_portfolio_history(db):
     if not hist_prices:
         return {}
 
-    # Union of all market dates across all symbols
     market_dates = sorted({d for dates in hist_prices.values() for d in dates})
 
-    # Unique accounts, in insertion order
+    # Group transactions by (date, account) for O(1) lookup
+    from collections import defaultdict
+    tx_by_date_acct = defaultdict(lambda: defaultdict(list))
+    for tx in buy_sell:
+        tx_by_date_acct[tx["date"]][tx["account_number"]].append(tx)
+
     seen, accounts = set(), []
     for t in buy_sell:
         acct = t.get("account_number", "")
@@ -185,21 +193,33 @@ def compute_portfolio_history(db):
 
     result = {}
 
-    for acct in accounts:
-        acct_txs = [t for t in buy_sell if t["account_number"] == acct]
-        if not acct_txs:
-            continue
+    def portfolio_value(holdings, date_str):
+        total = 0.0
+        for sym, qty in holdings.items():
+            if qty > 0 and sym in hist_prices:
+                price = hist_prices[sym].get(date_str)
+                if price:
+                    total += qty * price
+        return total
 
-        tx_idx     = 0
-        holdings   = {}        # {symbol: qty}
-        prev_value = None
-        cumulative = 1.0
-        points     = []
+    for acct in accounts:
+        holdings       = {}    # end-of-day holdings, updated after transactions
+        prev_after_val = None  # portfolio value at END of previous day (after that day's trades)
+        cumulative     = 1.0
+        points         = []
 
         for date_str in market_dates:
-            # Apply every transaction whose date ≤ this market day
-            while tx_idx < len(acct_txs) and acct_txs[tx_idx]["date"] <= date_str:
-                tx  = acct_txs[tx_idx]
+            # 1. Value holdings (carried from yesterday) at TODAY's prices — pure market move
+            val_before = portfolio_value(holdings, date_str)
+
+            # 2. Compute market return on existing positions (TWR sub-period)
+            if prev_after_val is not None and prev_after_val > 0 and val_before > 0:
+                daily_ret  = (val_before - prev_after_val) / prev_after_val
+                cumulative = round(cumulative * (1 + daily_ret), 6)
+                points.append({"date": date_str, "index": cumulative})
+
+            # 3. Apply today's transactions (buys add to portfolio, sells remove)
+            for tx in tx_by_date_acct.get(date_str, {}).get(acct, []):
                 sym = (tx.get("symbol") or "").strip()
                 qty = tx.get("quantity") or 0
                 if sym and sym not in SKIP_TICKERS:
@@ -207,29 +227,18 @@ def compute_portfolio_history(db):
                         holdings[sym] = holdings.get(sym, 0) + abs(qty)
                     elif tx["type"] == "sell":
                         holdings[sym] = max(0.0, holdings.get(sym, 0) - abs(qty))
-                tx_idx += 1
 
-            # Value the portfolio
-            value, valued = 0.0, False
-            for sym, qty in holdings.items():
-                if qty <= 0 or sym not in hist_prices:
-                    continue
-                price = hist_prices[sym].get(date_str)
-                if price is not None:
-                    value += qty * price
-                    valued = True
+            # 4. Value holdings AFTER transactions → becomes the base for tomorrow
+            val_after = portfolio_value(holdings, date_str)
 
-            if not valued or value <= 0:
-                continue
-
-            if prev_value is None:
+            if prev_after_val is None and val_after > 0:
+                # First day we own anything: anchor the index at 1.0
                 points.append({"date": date_str, "index": 1.0})
-            else:
-                daily_ret  = (value - prev_value) / prev_value
-                cumulative = round(cumulative * (1 + daily_ret), 6)
-                points.append({"date": date_str, "index": cumulative})
-
-            prev_value = value
+                prev_after_val = val_after
+            elif val_after > 0:
+                prev_after_val = val_after
+            # If val_after == 0 (fully liquidated), keep prev_after_val so the
+            # next purchase restarts the return from that prior base.
 
         if len(points) >= 2:
             result[acct] = points
