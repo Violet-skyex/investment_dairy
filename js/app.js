@@ -9,7 +9,8 @@ const ACCOUNTS = {
   '74509': '401(k)',
 };
 
-const SKIP_SYMBOLS = new Set(['SPAXX**', 'SPAXX', 'Pending activity', '', 'Pending Activity']);
+const SKIP_SYMBOLS = new Set(['SPAXX**', 'SPAXX', '']);
+const PENDING_SYMBOLS = new Set(['Pending activity', 'Pending Activity']);
 
 const TAB_TITLES = {
   dashboard: 'Dashboard',
@@ -208,6 +209,7 @@ async function loadFromGitHub() {
     state.db.seen_tx_hashes = state.db.seen_tx_hashes || [];
     state.db.predictions = state.db.predictions || [];
     state.db.notes = state.db.notes || {};
+    recomputeRealizedPnL();
     cacheSave();
   } catch (e) {
     console.warn('GitHub fetch failed:', e.message);
@@ -342,6 +344,50 @@ function getPredictionAccuracy(preds) {
 }
 
 // ============================================================
+// REALIZED P/L COMPUTATION
+// ============================================================
+function recomputeRealizedPnL() {
+  // Build hash-indexed map for mutation; reset all sell realized_pnl
+  const txMap = {};
+  for (const tx of state.db.transactions) {
+    txMap[tx.hash] = tx;
+    if (tx.type === 'sell') tx.realized_pnl = null;
+  }
+
+  // Process chronologically for average-cost tracking
+  const sorted = [...state.db.transactions].sort((a, b) => a.date.localeCompare(b.date));
+
+  // Average-cost pools: key = `symbol|account_number`
+  const pools = {}; // { totalCost: number, totalQty: number }
+
+  for (const tx of sorted) {
+    if (!tx.symbol || !tx.account_number) continue;
+    const key = `${tx.symbol}|${tx.account_number}`;
+
+    if (tx.type === 'buy' && tx.quantity != null && tx.quantity !== 0) {
+      if (!pools[key]) pools[key] = { totalCost: 0, totalQty: 0 };
+      const qty = Math.abs(tx.quantity);
+      // Use abs(amount) as total cost (captures commissions/fees); fall back to qty * price
+      const cost = tx.amount != null ? Math.abs(tx.amount) : qty * (tx.price || 0);
+      pools[key].totalCost += cost;
+      pools[key].totalQty += qty;
+
+    } else if (tx.type === 'sell' && tx.quantity != null && tx.quantity !== 0 && tx.amount != null) {
+      const pool = pools[key];
+      if (!pool || pool.totalQty < 0.0001) continue;
+      const qty = Math.abs(tx.quantity);
+      const avgCost = pool.totalCost / pool.totalQty;
+      const costBasis = avgCost * qty;
+      // Fidelity sell amounts are positive (proceeds received)
+      const proceeds = Math.abs(tx.amount);
+      txMap[tx.hash].realized_pnl = proceeds - costBasis;
+      pool.totalCost = Math.max(0, pool.totalCost - costBasis);
+      pool.totalQty = Math.max(0, pool.totalQty - qty);
+    }
+  }
+}
+
+// ============================================================
 // CSV PARSING
 // ============================================================
 function parseFidelityDate(str) {
@@ -407,11 +453,13 @@ function parsePositionsCSV(text) {
 
     // Skip footer rows (non-account lines)
     if (!isValidAccountNumber(acctNum)) continue;
-    // Skip unwanted symbols
+    // Skip money-market sweep
     if (SKIP_SYMBOLS.has(symbol)) continue;
     // Skip if no current value (likely a category header row)
     const cv = parseNumeric(row['Current Value']);
     if (cv == null) continue;
+
+    const isPending = PENDING_SYMBOLS.has(symbol);
 
     snapshots.push({
       date: snapshotDate,
@@ -419,15 +467,16 @@ function parsePositionsCSV(text) {
       account_name: (row['Account Name'] || ACCOUNTS[acctNum] || acctNum).trim(),
       symbol: symbol,
       description: (row['Description'] || '').trim(),
-      quantity: parseNumeric(row['Quantity']),
-      last_price: parseNumeric(row['Last Price']),
+      is_pending: isPending,             // unsettled cash — counted in totals, hidden in table
+      quantity: isPending ? null : parseNumeric(row['Quantity']),
+      last_price: isPending ? null : parseNumeric(row['Last Price']),
       current_value: cv,
-      todays_gain_loss_dollar: parseNumeric(row["Today's Gain/Loss Dollar"]),
-      todays_gain_loss_pct: parseNumeric(row["Today's Gain/Loss Percent"]),
-      total_gain_loss_dollar: parseNumeric(row["Total Gain/Loss Dollar"]),
-      total_gain_loss_pct: parseNumeric(row["Total Gain/Loss Percent"]),
-      cost_basis_total: parseNumeric(row['Cost Basis Total']),
-      average_cost_basis: parseNumeric(row['Average Cost Basis']),
+      todays_gain_loss_dollar: isPending ? 0 : parseNumeric(row["Today's Gain/Loss Dollar"]),
+      todays_gain_loss_pct: isPending ? 0 : parseNumeric(row["Today's Gain/Loss Percent"]),
+      total_gain_loss_dollar: isPending ? 0 : parseNumeric(row["Total Gain/Loss Dollar"]),
+      total_gain_loss_pct: isPending ? 0 : parseNumeric(row["Total Gain/Loss Percent"]),
+      cost_basis_total: isPending ? null : parseNumeric(row['Cost Basis Total']),
+      average_cost_basis: isPending ? null : parseNumeric(row['Average Cost Basis']),
     });
   }
 
@@ -651,6 +700,8 @@ function renderPositions(el) {
   } else {
     positions = byAcct[filterAcct] || [];
   }
+  // Pending-settlement rows are counted in value totals but not shown in the table
+  positions = positions.filter(p => !p.is_pending);
 
   if (allAccts.length === 0) {
     el.innerHTML = `
@@ -1209,6 +1260,7 @@ async function confirmImport(positionResult, historyResult) {
     }
   }
 
+  recomputeRealizedPnL();
   hideModal();
   const saved = await saveDB('data: import CSV');
   if (saved) {
