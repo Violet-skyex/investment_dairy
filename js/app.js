@@ -1099,66 +1099,83 @@ function readFileText(file) {
 async function processFiles(files) {
   // Always (re-)open the modal — on mobile the file picker can dismiss it
   showImportModal();
-  // One tick so modal DOM is painted before we touch it
   await new Promise(r => setTimeout(r, 30));
 
   const statusEl = document.getElementById('import-status');
   const previewEl = document.getElementById('import-preview');
   const confirmBtn = document.getElementById('imp-confirm');
 
-  statusEl.textContent = 'Parsing files…';
-
-  let positionResult = null;
-  let historyResult = null;
-
+  // Wrap everything so any crash shows as a visible error instead of silent hang
   try {
-    for (const file of files) {
+    // Step 0: check PapaParse loaded
+    if (typeof Papa === 'undefined') {
+      statusEl.textContent = '❌ PapaParse not loaded — hard-refresh the page (Ctrl+Shift+R)';
+      return;
+    }
+
+    let positionResult = null;
+    let historyResult = null;
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      statusEl.textContent = `Reading file ${i + 1}/${files.length}: ${file.name}…`;
+      await new Promise(r => setTimeout(r, 0)); // let the UI update
+
       const text = await readFileText(file);
+
+      statusEl.textContent = `Detecting type: ${file.name}…`;
+      await new Promise(r => setTimeout(r, 0));
+
       const type = detectCSVType(text);
+
       if (type === 'positions') {
+        statusEl.textContent = `Parsing positions…`;
+        await new Promise(r => setTimeout(r, 0));
         positionResult = parsePositionsCSV(text);
       } else if (type === 'history') {
+        statusEl.textContent = `Parsing history…`;
+        await new Promise(r => setTimeout(r, 0));
         historyResult = parseHistoryCSV(text);
       } else {
-        statusEl.textContent = `Could not detect type of "${file.name}" — make sure it's a Fidelity CSV`;
+        statusEl.textContent = `❌ "${file.name}" not recognized — must be a Fidelity Portfolio Positions or Accounts History CSV`;
         return;
       }
     }
+
+    if (!positionResult && !historyResult) {
+      statusEl.textContent = '❌ No valid CSV data found.';
+      return;
+    }
+
+    // Build preview
+    statusEl.textContent = '';
+    let previewHTML = '';
+
+    if (positionResult) {
+      const posCount = positionResult.positions.length;
+      const accts = [...new Set(positionResult.positions.map(p => ACCOUNTS[p.account_number] || p.account_number))].join(', ');
+      previewHTML += `<div class="preview-item"><span>Positions snapshot</span><span class="positive">${posCount} rows (${fmtDate(positionResult.date)})</span></div>`;
+      previewHTML += `<div class="preview-item text-muted text-xs"><span>Accounts</span><span>${accts || 'none detected'}</span></div>`;
+    }
+    if (historyResult) {
+      const { newTxs, dupeCount } = historyResult;
+      const byType = newTxs.reduce((acc, t) => { acc[t.type] = (acc[t.type] || 0) + 1; return acc; }, {});
+      previewHTML += `<div class="preview-item"><span>New transactions</span><span class="positive">${newTxs.length} added</span></div>`;
+      if (dupeCount > 0) previewHTML += `<div class="preview-item text-muted text-xs"><span>Duplicates skipped</span><span>${dupeCount}</span></div>`;
+      Object.entries(byType).forEach(([t, count]) => {
+        previewHTML += `<div class="preview-item text-muted text-xs"><span style="padding-left:12px">↳ ${t}</span><span>${count}</span></div>`;
+      });
+    }
+
+    previewEl.innerHTML = previewHTML || '<div class="preview-item text-muted">No new data to import.</div>';
+    confirmBtn.style.opacity = '1';
+    confirmBtn.style.pointerEvents = '';
+    confirmBtn.onclick = () => confirmImport(positionResult, historyResult);
+
   } catch (err) {
-    statusEl.textContent = 'Error reading file: ' + err.message;
-    return;
+    console.error('processFiles error:', err);
+    if (statusEl) statusEl.innerHTML = `❌ Error: ${err.message}<br><small style="color:var(--text-muted)">${err.stack ? err.stack.split('\n')[1] : ''}</small>`;
   }
-
-  if (!positionResult && !historyResult) {
-    statusEl.textContent = 'No valid CSV files found.';
-    return;
-  }
-
-  // Build preview HTML
-  let previewHTML = '';
-  if (positionResult) {
-    const posCount = positionResult.positions.length;
-    const accts = [...new Set(positionResult.positions.map(p => ACCOUNTS[p.account_number] || p.account_number))].join(', ');
-    previewHTML += `<div class="preview-item"><span>Positions snapshot</span><span class="positive">${posCount} rows (${fmtDate(positionResult.date)})</span></div>`;
-    previewHTML += `<div class="preview-item text-muted text-xs"><span>Accounts</span><span>${accts}</span></div>`;
-  }
-  if (historyResult) {
-    const { newTxs, dupeCount } = historyResult;
-    const byType = newTxs.reduce((acc, t) => { acc[t.type] = (acc[t.type]||0)+1; return acc; }, {});
-    previewHTML += `<div class="preview-item"><span>New transactions</span><span class="positive">${newTxs.length} added</span></div>`;
-    if (dupeCount > 0) previewHTML += `<div class="preview-item text-muted text-xs"><span>Duplicates skipped</span><span>${dupeCount}</span></div>`;
-    Object.entries(byType).forEach(([type, count]) => {
-      previewHTML += `<div class="preview-item text-muted text-xs"><span style="padding-left:12px">↳ ${type}</span><span>${count}</span></div>`;
-    });
-  }
-
-  previewEl.innerHTML = previewHTML;
-  statusEl.textContent = '';
-
-  // Enable confirm button
-  confirmBtn.style.opacity = '1';
-  confirmBtn.style.pointerEvents = '';
-  confirmBtn.onclick = () => confirmImport(positionResult, historyResult);
 }
 
 async function confirmImport(positionResult, historyResult) {
