@@ -329,21 +329,27 @@ function getDashboardData() {
     const dgl  = nonPending.reduce((s, p) => s + (p.todays_gain_loss_dollar || 0), 0);
     const ugl  = nonPending.reduce((s, p) => s + (p.total_gain_loss_dollar || 0), 0);
 
-    const txDeposits = state.db.transactions
-      .filter(t => t.account_number === acct && t.type === 'deposit' && t.amount > 0)
+    // Net cash in = deposits - withdrawals (both are classified 'deposit'; withdrawals have negative amounts)
+    const txNetCash = state.db.transactions
+      .filter(t => t.account_number === acct && t.type === 'deposit')
       .reduce((s, t) => s + (t.amount || 0), 0);
-    // 401k fund exchanges lock market gains into cost basis, so transaction deposits
+    // 401k fund exchanges lock market gains into cost basis, so transaction net cash
     // undercount. Use snapshot cost_basis_total (= value - unrealized P/L) for 401k only.
     const snapshotCostBasis = nonPending.reduce((s, p) => s + (p.cost_basis_total || 0), 0);
     const deposits = acct === '74509'
-      ? (snapshotCostBasis > 0 ? snapshotCostBasis : txDeposits)
-      : txDeposits;
+      ? (snapshotCostBasis > 0 ? snapshotCostBasis : txNetCash)
+      : txNetCash;
 
     const realizedPnL = state.db.transactions
       .filter(t => t.account_number === acct && t.type === 'sell' && t.realized_pnl != null)
       .reduce((s, t) => s + t.realized_pnl, 0);
 
-    accountRows.push({ acct, name: ACCOUNTS[acct] || acct, value: val, dailyGL: dgl, unrealizedGL: ugl, deposits, realizedPnL });
+    // Dividends complete the accounting identity: Net Cash In + Unrealized + Realized + Dividends = Account Value
+    const dividends = state.db.transactions
+      .filter(t => t.account_number === acct && t.type === 'dividend' && t.amount != null)
+      .reduce((s, t) => s + (t.amount || 0), 0);
+
+    accountRows.push({ acct, name: ACCOUNTS[acct] || acct, value: val, dailyGL: dgl, unrealizedGL: ugl, deposits, realizedPnL, dividends });
     totalValue       += val;
     totalDailyGL     += dgl;
     totalUnrealizedGL += ugl;
@@ -844,16 +850,16 @@ function renderDashboard(el) {
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 12px;font-size:13px">
             <div>
-              <div class="stat-label" style="margin-bottom:2px">Deposits</div>
-              <div>${a.deposits > 0 ? fmtMoneyFull(a.deposits) : '—'}</div>
+              <div class="stat-label" style="margin-bottom:2px">Net Cash In</div>
+              <div>${fmtMoneyFull(a.deposits)}</div>
             </div>
             <div>
               <div class="stat-label" style="margin-bottom:2px">Unrealized P/L</div>
               <div class="${colorClass(a.unrealizedGL)}">${fmtMoneyFull(a.unrealizedGL, true)}</div>
             </div>
             <div>
-              <div class="stat-label" style="margin-bottom:2px">Realized P/L</div>
-              <div class="${colorClass(a.realizedPnL)}">${a.realizedPnL !== 0 ? fmtMoneyFull(a.realizedPnL, true) : '—'}</div>
+              <div class="stat-label" style="margin-bottom:2px">Realized + Div</div>
+              <div class="${colorClass(a.realizedPnL + a.dividends)}">${(a.realizedPnL + a.dividends) !== 0 ? fmtMoneyFull(a.realizedPnL + a.dividends, true) : '—'}</div>
             </div>
             <div>
               <div class="stat-label" style="margin-bottom:2px">Today's G/L</div>
