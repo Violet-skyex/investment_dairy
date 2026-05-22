@@ -1086,6 +1086,11 @@ function showImportModal() {
 }
 
 async function processFiles(files) {
+  // Always (re-)open the modal — on mobile the file picker can dismiss it
+  showImportModal();
+  // One tick so modal DOM is painted before we touch it
+  await new Promise(r => setTimeout(r, 30));
+
   const statusEl = document.getElementById('import-status');
   const previewEl = document.getElementById('import-preview');
   const confirmBtn = document.getElementById('imp-confirm');
@@ -1141,8 +1146,14 @@ async function processFiles(files) {
 }
 
 async function confirmImport(positionResult, historyResult) {
-  hideModal();
-  showToast('Saving…');
+  // Show saving state inside the modal before closing
+  const confirmBtn = document.getElementById('imp-confirm');
+  if (confirmBtn) {
+    confirmBtn.textContent = '⏳ Saving to GitHub…';
+    confirmBtn.style.opacity = '0.7';
+    confirmBtn.style.pointerEvents = 'none';
+  }
+  await new Promise(r => setTimeout(r, 30)); // let button repaint
 
   if (positionResult && positionResult.positions.length > 0) {
     // Add all new position rows (they're timestamped so duplicates are OK, but let's avoid exact dupes)
@@ -1165,13 +1176,13 @@ async function confirmImport(positionResult, historyResult) {
     }
   }
 
+  hideModal();
   const saved = await saveDB('data: import CSV');
   if (saved) {
     showToast('Import saved to GitHub ✓');
   } else {
-    // Save locally anyway
     cacheSave();
-    showToast('Saved locally (GitHub failed)');
+    showToast('Saved locally (GitHub failed — check Settings)');
   }
   render();
 }
