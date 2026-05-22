@@ -329,9 +329,15 @@ function getDashboardData() {
     const dgl  = nonPending.reduce((s, p) => s + (p.todays_gain_loss_dollar || 0), 0);
     const ugl  = nonPending.reduce((s, p) => s + (p.total_gain_loss_dollar || 0), 0);
 
-    const deposits = state.db.transactions
+    // Cost basis from position snapshot — always reconciles with value & unrealized P/L.
+    // Fund exchanges inside a 401k lock market gains into cost basis, so
+    // transaction-based deposit totals diverge; snapshot cost basis never does.
+    // Fall back to transaction deposits when no snapshot data exists.
+    const snapshotCostBasis = nonPending.reduce((s, p) => s + (p.cost_basis_total || 0), 0);
+    const txDeposits = state.db.transactions
       .filter(t => t.account_number === acct && t.type === 'deposit' && t.amount > 0)
       .reduce((s, t) => s + (t.amount || 0), 0);
+    const deposits = snapshotCostBasis > 0 ? snapshotCostBasis : txDeposits;
 
     const realizedPnL = state.db.transactions
       .filter(t => t.account_number === acct && t.type === 'sell' && t.realized_pnl != null)
@@ -603,6 +609,9 @@ function classifyTx(action) {
   const a = action.toUpperCase();
   if (a.includes('YOU BOUGHT')) return 'buy';
   if (a.includes('YOU SOLD')) return 'sell';
+  // intra-account fund exchanges (Exchange In / Exchange Out) are NOT deposits
+  if (a.startsWith('EXCHANGE')) return 'exchange';
+  if (a.includes('CHANGE IN MARKET VALUE')) return 'other';
   if (a.includes('DIRECT DEPOSIT') || a.includes(' ACH ') || a.includes('TRANSFER') ||
       a.includes('CONTRIBUTION') || a.includes('ROLLOVER') || a.includes('EMPLOYER') ||
       a.includes('PROFIT SHARING') || a.includes('CONVERSION')) return 'deposit';
