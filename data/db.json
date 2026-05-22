@@ -175,6 +175,23 @@
       "total_gain_loss_pct": 5.07,
       "cost_basis_total": 6325.6,
       "average_cost_basis": 337.22
+    },
+    {
+      "date": "2026-05-21",
+      "account_number": "Z39427432",
+      "account_name": "Individual",
+      "symbol": "Pending activity",
+      "description": "",
+      "is_pending": true,
+      "quantity": null,
+      "last_price": null,
+      "current_value": 9777.09,
+      "todays_gain_loss_dollar": 0,
+      "todays_gain_loss_pct": 0,
+      "total_gain_loss_dollar": 0,
+      "total_gain_loss_pct": 0,
+      "cost_basis_total": null,
+      "average_cost_basis": null
     }
   ],
   "transactions": [
@@ -193,7 +210,7 @@
       "fees": null,
       "amount": 69.95,
       "settlement_date": "05/22/2026",
-      "realized_pnl": null
+      "realized_pnl": -1.5924324718937157
     },
     {
       "hash": "e736k0_85",
@@ -210,7 +227,7 @@
       "fees": 0.2,
       "amount": 9707.14,
       "settlement_date": "05/22/2026",
-      "realized_pnl": null
+      "realized_pnl": -221.19756752811008
     },
     {
       "hash": "4vn7f0_87",
@@ -346,7 +363,7 @@
       "fees": null,
       "amount": 5.19,
       "settlement_date": "05/18/2026",
-      "realized_pnl": null
+      "realized_pnl": -0.0032357934684901224
     },
     {
       "hash": "ydg67h_100",
@@ -363,7 +380,7 @@
       "fees": 0.09,
       "amount": 3995.11,
       "settlement_date": "05/18/2026",
-      "realized_pnl": null
+      "realized_pnl": 0.31323579346872066
     },
     {
       "hash": "ie9bh_90",
@@ -380,7 +397,7 @@
       "fees": null,
       "amount": 8.27,
       "settlement_date": "05/18/2026",
-      "realized_pnl": null
+      "realized_pnl": 0.23201558884423257
     },
     {
       "hash": "1qmqe15_91",
@@ -397,7 +414,7 @@
       "fees": 0.13,
       "amount": 6162.17,
       "settlement_date": "05/18/2026",
-      "realized_pnl": null
+      "realized_pnl": 170.21798441115607
     },
     {
       "hash": "1q5c32c_91",
@@ -448,7 +465,7 @@
       "fees": null,
       "amount": 2.18,
       "settlement_date": "05/18/2026",
-      "realized_pnl": null
+      "realized_pnl": 0.04407354934753416
     },
     {
       "hash": "vzl8cl_85",
@@ -482,7 +499,7 @@
       "fees": 0.13,
       "amount": 6115.87,
       "settlement_date": "05/18/2026",
-      "realized_pnl": null
+      "realized_pnl": 118.01592645065193
     },
     {
       "hash": "z1ovq8_86",
@@ -533,7 +550,7 @@
       "fees": null,
       "amount": 80.99,
       "settlement_date": "05/18/2026",
-      "realized_pnl": null
+      "realized_pnl": 13.800777274687348
     },
     {
       "hash": "1duyfd6_87",
@@ -567,7 +584,7 @@
       "fees": 0.05,
       "amount": 2338.91,
       "settlement_date": "05/18/2026",
-      "realized_pnl": null
+      "realized_pnl": 398.4270332039671
     },
     {
       "hash": "1v1u6rn_86",
@@ -856,7 +873,7 @@
       "fees": null,
       "amount": 67.47,
       "settlement_date": "05/12/2026",
-      "realized_pnl": null
+      "realized_pnl": 0.017199253963312344
     },
     {
       "hash": "1xaa3d3_83",
@@ -873,7 +890,7 @@
       "fees": 0.02,
       "amount": 932.86,
       "settlement_date": "05/12/2026",
-      "realized_pnl": null
+      "realized_pnl": 0.3328007460366962
     },
     {
       "hash": "kn7x6n_85",
@@ -907,7 +924,7 @@
       "fees": null,
       "amount": 445.05,
       "settlement_date": "05/07/2026",
-      "realized_pnl": null
+      "realized_pnl": 43.27184693524214
     },
     {
       "hash": "qqn6bm_90",
@@ -992,7 +1009,7 @@
       "fees": null,
       "amount": 283.72,
       "settlement_date": "05/07/2026",
-      "realized_pnl": null
+      "realized_pnl": 41.40218952134546
     },
     {
       "hash": "1os2u9m_94",
@@ -1009,7 +1026,7 @@
       "fees": 0.11,
       "amount": 5327.89,
       "settlement_date": "05/06/2026",
-      "realized_pnl": null
+      "realized_pnl": 479.8881530647586
     },
     {
       "hash": "kpx1ya_98",
@@ -1145,7 +1162,7 @@
       "fees": null,
       "amount": 5.81,
       "settlement_date": "04/29/2026",
-      "realized_pnl": null
+      "realized_pnl": 0.12450149159993629
     },
     {
       "hash": "osxxgx_86",
@@ -1162,7 +1179,7 @@
       "fees": 0.03,
       "amount": 1031.67,
       "settlement_date": "04/29/2026",
-      "realized_pnl": null
+      "realized_pnl": 22.095498508400055
     },
     {
       "hash": "wfp8a4_88",
