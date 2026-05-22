@@ -329,15 +329,15 @@ function getDashboardData() {
     const dgl  = nonPending.reduce((s, p) => s + (p.todays_gain_loss_dollar || 0), 0);
     const ugl  = nonPending.reduce((s, p) => s + (p.total_gain_loss_dollar || 0), 0);
 
-    // Cost basis from position snapshot — always reconciles with value & unrealized P/L.
-    // Fund exchanges inside a 401k lock market gains into cost basis, so
-    // transaction-based deposit totals diverge; snapshot cost basis never does.
-    // Fall back to transaction deposits when no snapshot data exists.
-    const snapshotCostBasis = nonPending.reduce((s, p) => s + (p.cost_basis_total || 0), 0);
     const txDeposits = state.db.transactions
       .filter(t => t.account_number === acct && t.type === 'deposit' && t.amount > 0)
       .reduce((s, t) => s + (t.amount || 0), 0);
-    const deposits = snapshotCostBasis > 0 ? snapshotCostBasis : txDeposits;
+    // 401k fund exchanges lock market gains into cost basis, so transaction deposits
+    // undercount. Use snapshot cost_basis_total (= value - unrealized P/L) for 401k only.
+    const snapshotCostBasis = nonPending.reduce((s, p) => s + (p.cost_basis_total || 0), 0);
+    const deposits = acct === '74509'
+      ? (snapshotCostBasis > 0 ? snapshotCostBasis : txDeposits)
+      : txDeposits;
 
     const realizedPnL = state.db.transactions
       .filter(t => t.account_number === acct && t.type === 'sell' && t.realized_pnl != null)
