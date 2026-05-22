@@ -1085,6 +1085,17 @@ function showImportModal() {
   };
 }
 
+// FileReader-based read — works on all browsers including old iOS Safari
+// file.text() is not available before Safari 14.1 and hangs silently
+function readFileText(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => resolve(e.target.result);
+    reader.onerror = () => reject(new Error('Failed to read file: ' + file.name));
+    reader.readAsText(file, 'utf-8');
+  });
+}
+
 async function processFiles(files) {
   // Always (re-)open the modal — on mobile the file picker can dismiss it
   showImportModal();
@@ -1100,17 +1111,22 @@ async function processFiles(files) {
   let positionResult = null;
   let historyResult = null;
 
-  for (const file of files) {
-    const text = await file.text();
-    const type = detectCSVType(text);
-    if (type === 'positions') {
-      positionResult = parsePositionsCSV(text);
-    } else if (type === 'history') {
-      historyResult = parseHistoryCSV(text);
-    } else {
-      statusEl.textContent = `Could not detect type of ${file.name}`;
-      return;
+  try {
+    for (const file of files) {
+      const text = await readFileText(file);
+      const type = detectCSVType(text);
+      if (type === 'positions') {
+        positionResult = parsePositionsCSV(text);
+      } else if (type === 'history') {
+        historyResult = parseHistoryCSV(text);
+      } else {
+        statusEl.textContent = `Could not detect type of "${file.name}" — make sure it's a Fidelity CSV`;
+        return;
+      }
     }
+  } catch (err) {
+    statusEl.textContent = 'Error reading file: ' + err.message;
+    return;
   }
 
   if (!positionResult && !historyResult) {
