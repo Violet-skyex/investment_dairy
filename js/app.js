@@ -46,6 +46,7 @@ const state = {
     positionTicker: null,  // drill-down ticker in Positions
     posAcct: 'all',        // filter for Positions tab
     histAcct: 'all',       // filter for History tab
+    chartAcct: 'all',      // filter for return-index chart
     histFrom: '',
     histTo: '',
   },
@@ -393,90 +394,93 @@ function computeReturnSeries() {
 function renderReturnChart() {
   const ORDER = ['Z39427432', '263684031', '74509'];
 
-  // Prefer pre-computed series from GitHub Actions; fall back to snapshot-based computation
-  let series = state.chartData && Object.keys(state.chartData.series || {}).length
+  // Prefer pre-computed series from GitHub Actions; fall back to snapshot-based
+  const rawSeries = (state.chartData && Object.keys(state.chartData.series || {}).length)
     ? state.chartData.series
     : computeReturnSeries().series;
 
-  const accts = Object.keys(series)
-    .filter(a => (series[a] || []).length >= 2)
+  const allAccts = Object.keys(rawSeries)
+    .filter(a => (rawSeries[a] || []).length >= 2)
     .sort((a, b) => ORDER.indexOf(a) - ORDER.indexOf(b));
 
-  if (accts.length === 0) {
+  if (allAccts.length === 0) {
     return `
       <div style="padding:12px 16px 0">
         <div class="card" style="padding:14px 16px">
           <div style="font-size:13px;font-weight:600;margin-bottom:6px">Return Index</div>
           <div class="text-muted text-sm" style="text-align:center;padding:20px 0 4px">
-            Chart will appear after the next scheduled price fetch (prices fetched twice daily on weekdays)
+            Chart appears after next scheduled price fetch (weekdays 9:35 AM &amp; 4:05 PM ET)
           </div>
         </div>
       </div>`;
   }
 
-  // Collect all dates across all accounts and sort them
-  const allDates = [...new Set(accts.flatMap(a => series[a].map(p => p.date)))].sort();
+  // Which accounts to draw
+  const filterAcct = state.view.chartAcct || 'all';
+  const visibleAccts = filterAcct === 'all' ? allAccts : allAccts.filter(a => a === filterAcct);
+
+  // Account switcher chips
+  const chips = [{ id: 'all', label: 'All' }, ...allAccts.map(a => ({ id: a, label: ACCOUNTS[a] || a }))];
+  const chipsHTML = chips.map(c =>
+    `<button class="filter-chip chart-acct-chip${filterAcct === c.id ? ' active' : ''}"
+      data-acct="${c.id}"
+      style="padding:3px 10px;font-size:11px;border-radius:14px">${c.label}</button>`
+  ).join('');
+
+  // Dates union for visible accounts
+  const allDates = [...new Set(visibleAccts.flatMap(a => rawSeries[a].map(p => p.date)))].sort();
 
   // SVG dimensions
-  const W = 340, H = 168;
+  const W = 340, H = 160;
   const PL = 42, PR = 12, PT = 10, PB = 28;
   const plotW = W - PL - PR, plotH = H - PT - PB;
 
-  // Y range
-  const allIdx = accts.flatMap(a => series[a].map(p => p.index));
+  const allIdx = visibleAccts.flatMap(a => rawSeries[a].map(p => p.index));
   const minY = Math.min(...allIdx);
   const maxY = Math.max(...allIdx);
-  const pad = Math.max((maxY - minY) * 0.15, 0.003);
+  const pad = Math.max((maxY - minY) * 0.18, 0.004);
   const yMin = minY - pad, yMax = maxY + pad;
 
   const xOf = d => PL + (allDates.indexOf(d) / Math.max(allDates.length - 1, 1)) * plotW;
   const yOf = v => PT + plotH - ((v - yMin) / (yMax - yMin)) * plotH;
-
   const baseY = yOf(1.0).toFixed(1);
 
-  // Paths + endpoint dots
   let paths = '', endDots = '';
-  for (const acct of accts) {
-    const pts = series[acct];
+  for (const acct of visibleAccts) {
+    const pts = rawSeries[acct];
     const color = ACCT_COLORS[acct] || '#888';
     const d = pts.map((p, i) =>
       `${i === 0 ? 'M' : 'L'}${xOf(p.date).toFixed(1)},${yOf(p.index).toFixed(1)}`
     ).join(' ');
     paths += `<path d="${d}" stroke="${color}" stroke-width="2" fill="none" stroke-linejoin="round" stroke-linecap="round"/>`;
     const last = pts[pts.length - 1];
-    const lastX = xOf(last.date).toFixed(1), lastY = yOf(last.index).toFixed(1);
-    const pct = ((last.index - 1) * 100).toFixed(1);
-    endDots += `<circle cx="${lastX}" cy="${lastY}" r="3.5" fill="${color}"/>`;
+    endDots += `<circle cx="${xOf(last.date).toFixed(1)}" cy="${yOf(last.index).toFixed(1)}" r="3.5" fill="${color}"/>`;
   }
 
-  // X axis labels (≤ 6 evenly spaced)
   let xLabels = '';
   const xStep = Math.max(1, Math.ceil(allDates.length / 6));
   for (let i = 0; i < allDates.length; i += xStep) {
     xLabels += `<text x="${xOf(allDates[i]).toFixed(1)}" y="${H - 5}" text-anchor="middle" font-size="9" fill="var(--text-muted)">${allDates[i].slice(5)}</text>`;
   }
 
-  // Y axis: 3 labels (low, baseline=0%, high)
   let yLabels = '';
-  const yTicks = [minY + pad * 0.6, 1.0, maxY - pad * 0.6];
-  for (const v of yTicks) {
+  for (const v of [minY + pad * 0.6, 1.0, maxY - pad * 0.6]) {
     const y = yOf(v);
     if (y < PT - 4 || y > PT + plotH + 4) continue;
     yLabels += `<text x="${PL - 4}" y="${y.toFixed(1)}" text-anchor="end" dominant-baseline="middle" font-size="9" fill="var(--text-muted)">${((v - 1) * 100).toFixed(1)}%</text>`;
   }
 
-  // Legend
-  const legend = accts.map(a => {
-    const pts = series[a];
-    const last = pts[pts.length - 1];
+  const legend = visibleAccts.map(a => {
+    const last = rawSeries[a][rawSeries[a].length - 1];
     const pct = ((last.index - 1) * 100).toFixed(1);
     const sign = last.index >= 1 ? '+' : '';
+    const col = last.index >= 1 ? 'var(--positive)' : 'var(--negative)';
     return `<span style="display:inline-flex;align-items:center;gap:3px">
       <svg width="14" height="3" style="vertical-align:middle"><line x1="0" y1="1.5" x2="14" y2="1.5" stroke="${ACCT_COLORS[a]||'#888'}" stroke-width="2"/></svg>
       <span style="font-size:10px;color:var(--text-muted)">${ACCOUNTS[a] || a}</span>
-      <span style="font-size:10px;color:${last.index >= 1 ? 'var(--positive)' : 'var(--negative)'}">${sign}${pct}%</span>
+      <span style="font-size:10px;color:${col};font-weight:600">${sign}${pct}%</span>
     </span>`;
-  }).join('<span style="margin:0 4px"></span>');
+  }).join('<span style="margin:0 6px"></span>');
 
   const updatedAt = state.chartData && state.chartData.updated_at
     ? new Date(state.chartData.updated_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
@@ -485,17 +489,15 @@ function renderReturnChart() {
   return `
     <div style="padding:12px 16px 0">
       <div class="card" style="padding:12px 10px 8px">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;padding:0 4px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;padding:0 4px">
           <span style="font-size:13px;font-weight:600">Return Index</span>
-          <div style="display:flex;gap:0;flex-wrap:wrap;justify-content:flex-end">${legend}</div>
+          <div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end">${chipsHTML}</div>
         </div>
+        <div style="padding:0 4px 6px;display:flex;flex-wrap:wrap;gap:6px">${legend}</div>
         <svg viewBox="0 0 ${W} ${H}" width="100%" style="overflow:visible;display:block">
           <line x1="${PL}" y1="${baseY}" x2="${(W - PR).toFixed(1)}" y2="${baseY}"
                 stroke="var(--border)" stroke-width="1" stroke-dasharray="3,2"/>
-          ${paths}
-          ${endDots}
-          ${xLabels}
-          ${yLabels}
+          ${paths}${endDots}${xLabels}${yLabels}
         </svg>
         ${updatedAt ? `<div class="text-xs text-muted" style="text-align:right;padding:4px 4px 0">Updated ${updatedAt}</div>` : ''}
       </div>
@@ -843,6 +845,9 @@ function renderDashboard(el) {
 
   document.getElementById('btn-upload-dash').onclick = showImportModal;
   document.getElementById('btn-settings').onclick = showSettingsModal;
+  el.querySelectorAll('.chart-acct-chip').forEach(c => {
+    c.onclick = () => { state.view.chartAcct = c.dataset.acct; renderDashboard(el); };
+  });
 }
 
 // ─── Positions ───────────────────────────────────────────────
@@ -1667,6 +1672,22 @@ function hideFABs() {
 }
 
 // ============================================================
+// THEME
+// ============================================================
+function applyTheme(theme) {
+  document.body.classList.toggle('theme-light', theme === 'light');
+  const btn = document.getElementById('btn-theme');
+  if (btn) btn.textContent = theme === 'light' ? '🌙' : '☀';
+}
+
+function toggleTheme() {
+  const isLight = document.body.classList.contains('theme-light');
+  const next = isLight ? 'dark' : 'light';
+  localStorage.setItem('pt_theme', next);
+  applyTheme(next);
+}
+
+// ============================================================
 // EVENT HANDLERS
 // ============================================================
 function setupEventListeners() {
@@ -1689,6 +1710,9 @@ function setupEventListeners() {
   document.getElementById('modal-overlay').onclick = e => {
     if (e.target === document.getElementById('modal-overlay')) hideModal();
   };
+
+  // Theme toggle
+  document.getElementById('btn-theme').onclick = toggleTheme;
 }
 
 // ============================================================
@@ -1696,6 +1720,7 @@ function setupEventListeners() {
 // ============================================================
 async function init() {
   loadSettings();
+  applyTheme(localStorage.getItem('pt_theme') || 'light');
   cacheLoad();
 
   // Show cached data immediately

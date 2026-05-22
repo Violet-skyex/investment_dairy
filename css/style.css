@@ -24,6 +24,42 @@
 }
 
 /* ============================================================
+   Light Theme
+   ============================================================ */
+body.theme-light {
+  --bg: #f4f6fb;
+  --surface: #ffffff;
+  --surface2: #eaecf5;
+  --border: #d8dcea;
+  --text: #181a28;
+  --text-muted: #6b7290;
+  --accent: #3b7ef5;
+  --accent-dim: #dceaff;
+  --positive: #059669;
+  --negative: #dc2626;
+  --buy: #3b7ef5;
+  --sell: #64748b;
+  --deposit: #059669;
+  --dividend: #0891b2;
+}
+
+body.theme-light #modal-overlay {
+  background: rgba(0, 0, 0, 0.42);
+}
+
+body.theme-light .seg-btn.active {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+body.theme-light .fab {
+  box-shadow: 0 4px 16px rgba(59, 126, 245, 0.28);
+}
+
+body.theme-light tbody tr:active {
+  background: var(--surface2);
+}
+
+/* ============================================================
    Reset & Base
    ============================================================ */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
