@@ -106,7 +106,7 @@ def verify_predictions(db, prices, today_str):
         elif pred_type == "overnight":
             price_at_pred = pred.get("price_at_prediction")
             today_open    = p.get("open")
-            if pred_date < today_str and price_at_pred and today_open is not None:
+            if pred_date <= today_str and price_at_pred and today_open is not None:
                 pred["result"]      = "correct" if (direction == "up") == (today_open > price_at_pred) else "wrong"
                 pred["verified_at"] = datetime.now(timezone.utc).isoformat()
                 changed = True
