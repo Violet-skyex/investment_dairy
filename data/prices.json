@@ -1,83 +1,83 @@
 {
-  "updated_at": "2026-05-28T17:08:01.023047+00:00",
+  "updated_at": "2026-05-28T22:00:57.219418+00:00",
   "date": "2026-05-28",
   "prices": {
     "GLD": {
       "open": 406.48,
-      "close": 413.6501,
-      "high": 414.36,
+      "close": 412.77,
+      "high": 414.505,
       "low": 405.4108,
-      "volume": 4699406
+      "volume": 7141210
     },
     "GRID": {
       "open": 193.77,
-      "close": 194.495,
+      "close": 193.88,
       "high": 194.8,
       "low": 191.5904,
-      "volume": 341689
+      "volume": 593899
     },
     "ICLN": {
       "open": 23.105,
-      "close": 23.58,
-      "high": 23.6,
+      "close": 23.4,
+      "high": 23.6452,
       "low": 23.04,
-      "volume": 4727936
+      "volume": 9821784
     },
     "IEMG": {
       "open": 82.465,
-      "close": 83.715,
+      "close": 83.56,
       "high": 83.82,
       "low": 82.19,
-      "volume": 24968382
+      "volume": 71209060
     },
     "QQQ": {
       "open": 729.74,
-      "close": 736.2,
-      "high": 736.45,
+      "close": 735.6,
+      "high": 736.6,
       "low": 726.41,
-      "volume": 19702224
+      "volume": 31058212
     },
     "QQQM": {
       "open": 300.48,
-      "close": 303.11,
-      "high": 303.22,
+      "close": 302.85,
+      "high": 303.25,
       "low": 299.14,
-      "volume": 2112980
+      "volume": 4106551
     },
     "SCHD": {
       "open": 32.618,
-      "close": 32.695,
+      "close": 32.63,
       "high": 32.73,
       "low": 32.5,
-      "volume": 10290600
+      "volume": 16357598
     },
     "SLV": {
       "open": 66.55,
-      "close": 68.47,
-      "high": 68.625,
+      "close": 68.36,
+      "high": 68.755,
       "low": 66.155,
-      "volume": 14354743
+      "volume": 18277278
     },
     "SOXX": {
       "open": 565.2,
-      "close": 575.181,
+      "close": 569.47,
       "high": 575.8,
       "low": 554.825,
-      "volume": 4552282
+      "volume": 6602989
     },
     "TQQQ": {
       "open": 81.73,
-      "close": 83.93,
-      "high": 84.0,
+      "close": 83.68,
+      "high": 84.05,
       "low": 80.66,
-      "volume": 40631084
+      "volume": 53647951
     },
     "VOO": {
       "open": 689.76,
-      "close": 693.75,
-      "high": 694.0286,
+      "close": 693.91,
+      "high": 694.29,
       "low": 688.86,
-      "volume": 3552513
+      "volume": 4970733
     }
   }
 }
