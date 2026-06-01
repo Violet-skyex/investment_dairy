@@ -1,83 +1,83 @@
 {
-  "updated_at": "2026-06-01T19:08:57.588900+00:00",
+  "updated_at": "2026-06-01T22:34:47.271341+00:00",
   "date": "2026-06-01",
   "prices": {
     "GLD": {
       "open": 409.86,
-      "close": 411.72,
+      "close": 411.26,
       "high": 412.61,
       "low": 408.24,
-      "volume": 4748879
+      "volume": 5930413
     },
     "GRID": {
       "open": 192.085,
-      "close": 193.9199,
+      "close": 193.365,
       "high": 194.115,
       "low": 191.24,
-      "volume": 617891
+      "volume": 822724
     },
     "ICLN": {
       "open": 23.31,
-      "close": 23.11,
+      "close": 23.04,
       "high": 23.315,
       "low": 22.66,
-      "volume": 4931476
+      "volume": 5705532
     },
     "IEMG": {
       "open": 84.42,
-      "close": 85.325,
+      "close": 85.18,
       "high": 85.68,
       "low": 84.05,
-      "volume": 10347457
+      "volume": 12521451
     },
     "QQQ": {
       "open": 737.13,
-      "close": 744.035,
+      "close": 742.74,
       "high": 745.64,
       "low": 735.99,
-      "volume": 25305447
+      "volume": 31432122
     },
     "QQQM": {
       "open": 303.65,
-      "close": 306.32,
+      "close": 305.82,
       "high": 306.98,
       "low": 303.03,
-      "volume": 3200394
+      "volume": 3883646
     },
     "SCHD": {
       "open": 32.27,
-      "close": 32.1699,
+      "close": 32.18,
       "high": 32.3302,
       "low": 32.15,
-      "volume": 22757284
+      "volume": 26754872
     },
     "SLV": {
       "open": 67.49,
-      "close": 67.93,
+      "close": 67.67,
       "high": 68.235,
       "low": 66.8,
-      "volume": 13789472
+      "volume": 15550335
     },
     "SOXX": {
       "open": 563.515,
-      "close": 572.81,
+      "close": 571.93,
       "high": 577.99,
       "low": 557.38,
-      "volume": 5705976
+      "volume": 6879129
     },
     "TQQQ": {
       "open": 84.1475,
-      "close": 86.5104,
+      "close": 86.04,
       "high": 87.06,
       "low": 83.75,
-      "volume": 50036922
+      "volume": 55583505
     },
     "VOO": {
       "open": 694.54,
-      "close": 698.4294,
+      "close": 697.3,
       "high": 699.04,
       "low": 693.95,
-      "volume": 5874659
+      "volume": 6947529
     }
   }
 }
