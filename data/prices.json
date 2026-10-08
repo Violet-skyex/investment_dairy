@@ -1,34 +1,34 @@
 {
-  "updated_at": "2026-10-07T19:27:35.639037+00:00",
-  "date": "2026-10-07",
+  "updated_at": "2026-10-08T00:06:10.000696+00:00",
+  "date": "2026-10-08",
   "prices": {
     "DRAM": {
-      "open": 58.15,
-      "close": 59.895,
-      "high": 60.33,
-      "low": 57.735,
-      "volume": 18986492
+      "open": NaN,
+      "close": NaN,
+      "high": NaN,
+      "low": NaN,
+      "volume": 21452875
     },
     "QQQ": {
-      "open": 753.87,
-      "close": 756.95,
-      "high": 757.68,
-      "low": 751.76,
-      "volume": 19325910
+      "open": NaN,
+      "close": NaN,
+      "high": NaN,
+      "low": NaN,
+      "volume": 25184775
     },
     "QQQM": {
-      "open": 310.41,
-      "close": 311.661,
-      "high": 311.95,
-      "low": 309.5399,
-      "volume": 2030552
+      "open": NaN,
+      "close": NaN,
+      "high": NaN,
+      "low": NaN,
+      "volume": 2896306
     },
     "SOXX": {
-      "open": 576.72,
-      "close": 580.56,
-      "high": 582.14,
-      "low": 574.13,
-      "volume": 3837297
+      "open": NaN,
+      "close": NaN,
+      "high": NaN,
+      "low": NaN,
+      "volume": 4851301
     }
   }
 }
